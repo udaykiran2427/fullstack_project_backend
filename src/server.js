@@ -3,6 +3,8 @@ const express = require("express");
 const cors = require("cors");
 const app = express();
 const passport = require("./config/passport"); // Import Passport.js
+const connectDB = require("./config/db"); // Import DB connection
+connectDB(); // Connect to MongoDB
 
 app.use(cors());
 app.use(express.json());
