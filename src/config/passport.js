@@ -8,8 +8,11 @@ passport.use(
       clientID: process.env.GITHUB_CLIENT_ID,
       clientSecret: process.env.GITHUB_CLIENT_SECRET,
       callbackURL: "http://localhost:5000/auth/github/callback",
+      passReqToCallback: true,
     },
-    (accessToken, refreshToken, profile, done) => {
+    async (req, accessToken, refreshToken, profile, done) => {
+      console.log("GitHub Access Token:", accessToken);
+      console.log("GitHub Profile:", profile);
       return done(null, profile);
     }
   )
@@ -21,4 +24,5 @@ passport.serializeUser((user, done) => {
 passport.deserializeUser((obj, done) => {
   done(null, obj);
 });
+
 module.exports = passport;
