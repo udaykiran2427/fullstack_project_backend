@@ -32,13 +32,27 @@ router.get(
         await user.save();
       }
 
-      const token = jwt.sign(
+      // const token = jwt.sign(
+      //   { id: user.id, username: user.username },
+      //   process.env.JWT_SECRET,
+      //   { expiresIn: "1h" }
+      // );
+      const accessToken = jwt.sign(
         { id: user.id, username: user.username },
         process.env.JWT_SECRET,
-        { expiresIn: "1h" }
+        { expiresIn: "15m" }
       );
-
-      res.json({ message: "GitHub login successful", token, user });
+      const refreshToken = jwt.sign(
+        { id: user.id, username: user.username },
+        process.env.REFRESH_SECRET,
+        { expiresIn: "7d" }
+      );
+      res.cookie("refreshToken", refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV == "production",
+        sameSite: "strict",
+      });
+      res.json({ message: "GitHub login successful", accessToken, user });
     } catch (error) {
       console.error("Error saving user:", error);
       res.status(500).json({ message: "Internal server error" });
@@ -64,6 +78,29 @@ router.post("/logout", (req, res) => {
     sameSite: "strict",
   });
   res.json({ message: "Logged out successfully" });
+});
+
+router.post("/refresh", (req, res) => {
+  const refreshToken = req.cookies.refreshToken;
+
+  if (!refreshToken) {
+    return res.status(401).json({ message: "No refresh token provided" });
+  }
+
+  try {
+    const decoded = jwt.verify(refreshToken, process.env.REFRESH_SECRET);
+    const newAccessToken = jwt.sign(
+      { id: decoded.id, username: decoded.username },
+      process.env.JWT_SECRET,
+      { expiresIn: "15m" }
+    );
+
+    res.json({ accessToken: newAccessToken });
+  } catch (error) {
+    return res
+      .status(403)
+      .json({ message: "Invalid or expired refresh token" });
+  }
 });
 
 module.exports = router;
