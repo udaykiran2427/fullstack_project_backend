@@ -9,11 +9,13 @@ router.get("/", (req, res) => {
   res.json({ message: "Auth route is working" });
 });
 
+// GitHub OAuth Login
 router.get(
   "/github",
   passport.authenticate("github", { scope: ["user:email"] })
 );
 
+// GitHub OAuth Callback
 router.get(
   "/github/callback",
   passport.authenticate("github", { failureRedirect: "/", session: false }),
@@ -32,26 +34,26 @@ router.get(
         await user.save();
       }
 
-      // const token = jwt.sign(
-      //   { id: user.id, username: user.username },
-      //   process.env.JWT_SECRET,
-      //   { expiresIn: "1h" }
-      // );
+      // Generate Access and Refresh Tokens
       const accessToken = jwt.sign(
         { id: user.id, username: user.username },
         process.env.JWT_SECRET,
         { expiresIn: "15m" }
       );
+
       const refreshToken = jwt.sign(
         { id: user.id, username: user.username },
         process.env.REFRESH_SECRET,
         { expiresIn: "7d" }
       );
+
+      // Set refresh token in HTTP-only cookie
       res.cookie("refreshToken", refreshToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV == "production",
+        secure: process.env.NODE_ENV === "production",
         sameSite: "strict",
       });
+
       res.json({ message: "GitHub login successful", accessToken, user });
     } catch (error) {
       console.error("Error saving user:", error);
@@ -60,6 +62,7 @@ router.get(
   }
 );
 
+// Fetch User Profile
 router.get("/profile", verifyToken, async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
@@ -71,8 +74,9 @@ router.get("/profile", verifyToken, async (req, res) => {
   }
 });
 
+// Logout and clear refresh token
 router.post("/logout", (req, res) => {
-  res.clearCookie("token", {
+  res.clearCookie("refreshToken", {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "strict",
@@ -80,27 +84,26 @@ router.post("/logout", (req, res) => {
   res.json({ message: "Logged out successfully" });
 });
 
+// Refresh Access Token
 router.post("/refresh", (req, res) => {
   const refreshToken = req.cookies.refreshToken;
-
   if (!refreshToken) {
-    return res.status(401).json({ message: "No refresh token provided" });
+    return res.status(403).json({ message: "Refresh token required" });
   }
 
-  try {
-    const decoded = jwt.verify(refreshToken, process.env.REFRESH_SECRET);
-    const newAccessToken = jwt.sign(
+  jwt.verify(refreshToken, process.env.REFRESH_SECRET, (err, decoded) => {
+    if (err) {
+      return res.status(403).json({ message: "Invalid refresh token" });
+    }
+
+    const accessToken = jwt.sign(
       { id: decoded.id, username: decoded.username },
       process.env.JWT_SECRET,
       { expiresIn: "15m" }
     );
 
-    res.json({ accessToken: newAccessToken });
-  } catch (error) {
-    return res
-      .status(403)
-      .json({ message: "Invalid or expired refresh token" });
-  }
+    res.json({ accessToken });
+  });
 });
 
 module.exports = router;
