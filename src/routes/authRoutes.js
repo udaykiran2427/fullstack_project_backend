@@ -46,7 +46,8 @@ router.get(
         process.env.REFRESH_SECRET,
         { expiresIn: "7d" }
       );
-
+      await user.setRefreshToken(refreshToken);
+      await user.save();
       // Set refresh token in HTTP-only cookie
       res.cookie("refreshToken", refreshToken, {
         httpOnly: true,
@@ -75,35 +76,33 @@ router.get("/profile", verifyToken, async (req, res) => {
 });
 
 // Logout and clear refresh token
-router.post("/logout", (req, res) => {
-  res.clearCookie("refreshToken", {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "strict",
-  });
-  res.json({ message: "Logged out successfully" });
-});
-
-// Refresh Access Token
-router.post("/refresh", (req, res) => {
+router.post("/refresh", async (req, res) => {
   const refreshToken = req.cookies.refreshToken;
   if (!refreshToken) {
     return res.status(403).json({ message: "Refresh token required" });
   }
 
-  jwt.verify(refreshToken, process.env.REFRESH_SECRET, (err, decoded) => {
-    if (err) {
-      return res.status(403).json({ message: "Invalid refresh token" });
-    }
+  try {
+    const decoded = jwt.verify(refreshToken, process.env.REFRESH_SECRET);
+    const user = await User.findById(decoded.id);
+    if (!user) return res.status(403).json({ message: "User not found" });
 
-    const accessToken = jwt.sign(
-      { id: decoded.id, username: decoded.username },
+    // Validate stored refresh token
+    const isValid = await user.isValidRefreshToken(refreshToken);
+    if (!isValid)
+      return res.status(403).json({ message: "Invalid refresh token" });
+
+    // Generate new access token
+    const newAccessToken = jwt.sign(
+      { id: user.id, username: user.username },
       process.env.JWT_SECRET,
       { expiresIn: "15m" }
     );
 
-    res.json({ accessToken });
-  });
+    res.json({ accessToken: newAccessToken });
+  } catch (err) {
+    return res.status(403).json({ message: "Invalid refresh token" });
+  }
 });
 
 module.exports = router;
