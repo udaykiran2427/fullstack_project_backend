@@ -87,22 +87,60 @@ router.post("/refresh", async (req, res) => {
     const user = await User.findById(decoded.id);
     if (!user) return res.status(403).json({ message: "User not found" });
 
-    // Validate stored refresh token
     const isValid = await user.isValidRefreshToken(refreshToken);
-    if (!isValid)
+    if (!isValid) {
+      user.refreshToken = null; // Remove invalid token
+      await user.save();
       return res.status(403).json({ message: "Invalid refresh token" });
+    }
 
-    // Generate new access token
+    // Generate new tokens
     const newAccessToken = jwt.sign(
       { id: user.id, username: user.username },
       process.env.JWT_SECRET,
       { expiresIn: "15m" }
     );
 
+    const newRefreshToken = jwt.sign(
+      { id: user.id, username: user.username },
+      process.env.REFRESH_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    await user.setRefreshToken(newRefreshToken);
+    await user.save();
+
+    res.cookie("refreshToken", newRefreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+    });
+
     res.json({ accessToken: newAccessToken });
   } catch (err) {
     return res.status(403).json({ message: "Invalid refresh token" });
   }
 });
-
+router.post("/logout", async (req, res) => {
+  console.log("Cookies received:", req.cookies);
+  const refreshToken = req.cookies.refreshToken;
+  if (!refreshToken) {
+    return res.status(400).json({ message: "No token provided" });
+  }
+  try {
+    const decoded = jwt.verify(refreshToken, process.env.REFRESH_SECRET);
+    const user = await User.findById(decoded.id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+    user.refreshToken = null;
+    await user.save();
+    res.clearCookie("refreshToken", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+    });
+    res.json({ message: "Logged out successfully" });
+  } catch (err) {
+    return res.status(400).json({ message: "Invalid token" });
+  }
+});
 module.exports = router;
