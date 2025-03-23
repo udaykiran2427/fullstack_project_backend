@@ -8,6 +8,23 @@ const userSchema = new mongoose.Schema({
   profileUrl: { type: String },
   refreshToken: { type: String },
   createdAt: { type: Date, default: Date.now },
+
+  githubStats: {
+    publicRepos: { type: Number, default: 0 },
+    followers: { type: Number, default: 0 },
+    following: { type: Number, default: 0 },
+  },
+  codeforcesStats: {
+    rank: { type: String, default: "Unrated" },
+    rating: { type: Number, default: 0 },
+    maxRank: { type: String, default: "Unrated" },
+    maxRating: { type: Number, default: 0 },
+  },
+  leetcodeStats: {
+    ranking: { type: Number, default: 0 },
+    reputation: { type: Number, default: 0 },
+    totalSolved: { type: Number, default: 0 },
+  },
 });
 
 userSchema.methods.setRefreshToken = async function (token) {
